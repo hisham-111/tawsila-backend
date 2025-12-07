@@ -1,5 +1,6 @@
 import Order from "../models/Order.js";
-
+import User from "../models/User.js";
+import { getActiveDriversMap } from "../sockets/driverSockets.js";
 
 
 // 🚨 الحل: تعريف الثابت المفقود هنا ليصبح متاحًا داخل الدوال
@@ -16,50 +17,132 @@ const generateOrderNumber = () => {
 // =======================================
 
 
+// export const submitOrder = async (req, res) => {
+//     try { 
+//         const orderData = {
+//             ...req.body,
+//             order_number: generateOrderNumber(), // استخدام الدالة المخصصة
+//         };
+
+//         const newOrder = await Order.create(orderData);
+
+//         // 2. Notify ALL active drivers via Socket.IO (Broadcast to the pool)
+//         const io = req.app.get("io");
+        
+//         if (io) {
+//             // الآن DRIVERS_POOL_ROOM مُعرّف ولن يسبب خطأ
+//             io.to(DRIVERS_POOL_ROOM).emit("new-order", {
+//                 order_number: newOrder.order_number,
+//                 type_of_item: newOrder.type_of_item,
+//                 customer_address: newOrder.customer.address,
+//                 customer_coords: newOrder.customer.coords,
+//             });
+
+//             console.log(`✅ Sent new order ${newOrder.order_number} to all active drivers in the pool.`);
+//         } else {
+//             console.log(`⚠️ Socket.IO not initialized. Order ${newOrder.order_number} submitted but not broadcasted.`);
+//         }
+
+//         // 3. Return success response
+//         res.status(201).json({
+//             message: "Order submitted successfully",
+//             order: { order_number: newOrder.order_number },
+//         });
+
+//     } catch (error) {
+//         console.error("❌ CRITICAL SUBMISSION ERROR:", error);
+
+//         // 💡 منطق محسّن للتعامل مع أخطاء التحقق من صحة البيانات
+//         if (error.name === "ValidationError") {
+//             // إرجاع 400 (Bad Request) لأخطاء البيانات المدخلة
+//             return res.status(400).json({ error: "Validation Failed", details: error.message });
+//         }
+        
+//         // إرجاع 500 لأخطاء الخادم الأخرى
+//         res.status(500).json({ error: "Failed to process order submission due to a server error.", details: error.message });
+//     }
+// };
+
+
+// دالة لحساب المسافة الجغرافية (خط مستقيم)
+
+
+const haversineDistance = (coords1, coords2) => {
+  const toRad = deg => deg * Math.PI / 180;
+  const R = 6371; // km
+  const dLat = toRad(coords2.lat - coords1.lat);
+  const dLng = toRad(coords2.lng - coords1.lng);
+  const a = 
+    Math.sin(dLat/2) ** 2 +
+    Math.cos(toRad(coords1.lat)) * Math.cos(toRad(coords2.lat)) * Math.sin(dLng/2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c; // distance in km
+};
+
 export const submitOrder = async (req, res) => {
-    try { 
-        const orderData = {
-            ...req.body,
-            order_number: generateOrderNumber(), // استخدام الدالة المخصصة
-        };
+  try {
+    const orderData = { ...req.body, order_number: generateOrderNumber() };
+    const newOrder = await Order.create(orderData);
 
-        const newOrder = await Order.create(orderData);
+    // 1️⃣ اختيار السائق الأقرب
+    const activeDriversMap = getActiveDriversMap();
+    const driverIds = Array.from(activeDriversMap.keys());
 
-        // 2. Notify ALL active drivers via Socket.IO (Broadcast to the pool)
+    if (driverIds.length > 0) {
+      // جلب السائقين من DB مع role = "staff" و availability = true
+      const drivers = await User.find({ 
+        _id: { $in: driverIds },
+        role: "staff",
+        availability: true
+      }).select("coords");
+
+      let closestDriver = null;
+      let minDistance = Infinity;
+
+      drivers.forEach(driver => {
+        if (!driver.coords) return;
+        const distance = haversineDistance(newOrder.customer.coords, driver.coords);
+        if (distance < minDistance) {
+          minDistance = distance;
+          closestDriver = driver;
+        }
+      });
+
+      if (closestDriver) {
+        newOrder.assigned_staff_id = closestDriver._id;
+        newOrder.status = "in_transit";
+        await newOrder.save();
+
+        // إخطار السائق فقط
         const io = req.app.get("io");
-        
-        if (io) {
-            // الآن DRIVERS_POOL_ROOM مُعرّف ولن يسبب خطأ
-            io.to(DRIVERS_POOL_ROOM).emit("new-order", {
-                order_number: newOrder.order_number,
-                type_of_item: newOrder.type_of_item,
-                customer_address: newOrder.customer.address,
-                customer_coords: newOrder.customer.coords,
-            });
-
-            console.log(`✅ Sent new order ${newOrder.order_number} to all active drivers in the pool.`);
-        } else {
-            console.log(`⚠️ Socket.IO not initialized. Order ${newOrder.order_number} submitted but not broadcasted.`);
+        const driverSocketId = activeDriversMap.get(closestDriver._id.toString());
+        if (io && driverSocketId) {
+          io.to(driverSocketId).emit("new-order-assigned", {
+            order_number: newOrder.order_number,
+            customer: newOrder.customer,
+            type_of_item: newOrder.type_of_item
+          });
         }
-
-        // 3. Return success response
-        res.status(201).json({
-            message: "Order submitted successfully",
-            order: { order_number: newOrder.order_number },
-        });
-
-    } catch (error) {
-        console.error("❌ CRITICAL SUBMISSION ERROR:", error);
-
-        // 💡 منطق محسّن للتعامل مع أخطاء التحقق من صحة البيانات
-        if (error.name === "ValidationError") {
-            // إرجاع 400 (Bad Request) لأخطاء البيانات المدخلة
-            return res.status(400).json({ error: "Validation Failed", details: error.message });
-        }
-        
-        // إرجاع 500 لأخطاء الخادم الأخرى
-        res.status(500).json({ error: "Failed to process order submission due to a server error.", details: error.message });
+      }
     }
+
+    // 2️⃣ إخطار جميع السائقين النشطين بالطلب الجديد
+    const io = req.app.get("io");
+    if (io) {
+      io.to(DRIVERS_POOL_ROOM).emit("new-order", {
+        order_number: newOrder.order_number,
+        type_of_item: newOrder.type_of_item,
+        customer_address: newOrder.customer.address,
+        customer_coords: newOrder.customer.coords,
+      });
+    }
+
+    res.status(201).json({ message: "Order submitted successfully", order: { order_number: newOrder.order_number } });
+
+  } catch (error) {
+    console.error("❌ CRITICAL SUBMISSION ERROR:", error);
+    res.status(500).json({ error: "Failed to submit order", details: error.message });
+  }
 };
 
 
