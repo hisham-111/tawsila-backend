@@ -1,0 +1,36 @@
+// src/routes/orderRoutes.js
+import { Router } from "express";
+import {
+  // createOrder,
+  getOrders,
+  getOrder,
+  getPlacesStats,
+  getOrdersByRange,
+  updateOrder,
+  deleteOrder,
+  getAvailableOrders,
+  acceptOrder,
+  updateDriverLocation,
+  calculateRouteInfo,
+  submitOrderRating
+} from "../controllers/orderController.js";
+import { authMiddleware } from "../middleware/auth.js";
+
+const router = Router();
+
+router.patch("/:orderId/rate", submitOrderRating); 
+
+router.get('/orders/available', getAvailableOrders);
+router.get("/places", authMiddleware(["admin"]), getPlacesStats);
+router.get("/logs-status", authMiddleware(["admin"]), getOrdersByRange);
+
+router.get("/", getOrders); 
+router.post('/route-info', calculateRouteInfo);
+router.post("/accept", authMiddleware(["staff", "admin"]), acceptOrder);
+router.post('/location/update', updateDriverLocation);
+
+router.get("/:id", getOrder); 
+router.put("/:id", authMiddleware(["staff", "admin"]), updateOrder);
+router.delete("/:id", authMiddleware(["admin"]), deleteOrder);
+
+export default router;
