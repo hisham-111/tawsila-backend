@@ -84,19 +84,19 @@ export const submitOrder = async (req, res) => {
     const orderData = { ...req.body, order_number: generateOrderNumber() };
     const newOrder = await Order.create(orderData);
 
-    // 1️⃣ اختيار السائق الأقرب
     const activeDriversMap = getActiveDriversMap();
     const driverIds = Array.from(activeDriversMap.keys());
 
+    let closestDriver = null;
+
     if (driverIds.length > 0) {
-      // جلب السائقين من DB مع role = "staff" و availability = true
+      // جلب السائقين المتاحين
       const drivers = await User.find({ 
         _id: { $in: driverIds },
         role: "staff",
         availability: true
       }).select("coords");
 
-      let closestDriver = null;
       let minDistance = Infinity;
 
       drivers.forEach(driver => {
@@ -109,11 +109,12 @@ export const submitOrder = async (req, res) => {
       });
 
       if (closestDriver) {
+        // تحديث الطلب بالسائق الأقرب
         newOrder.assigned_staff_id = closestDriver._id;
         newOrder.status = "in_transit";
         await newOrder.save();
 
-        // إخطار السائق فقط
+        // إخطار السائق الأقرب فقط
         const io = req.app.get("io");
         const driverSocketId = activeDriversMap.get(closestDriver._id.toString());
         if (io && driverSocketId) {
@@ -123,27 +124,34 @@ export const submitOrder = async (req, res) => {
             type_of_item: newOrder.type_of_item
           });
         }
+
+        // إخطار بقية السائقين مع استثناء السائق الأقرب
+        driverIds.forEach(driverId => {
+          if (driverId === closestDriver._id.toString()) return; // استثناء الأقرب
+          const socketId = activeDriversMap.get(driverId);
+          if (io && socketId) {
+            io.to(socketId).emit("new-order", {
+              order_number: newOrder.order_number,
+              type_of_item: newOrder.type_of_item,
+              customer_address: newOrder.customer.address,
+              customer_coords: newOrder.customer.coords,
+            });
+          }
+        });
       }
     }
 
-    // 2️⃣ إخطار جميع السائقين النشطين بالطلب الجديد
-    const io = req.app.get("io");
-    if (io) {
-      io.to(DRIVERS_POOL_ROOM).emit("new-order", {
-        order_number: newOrder.order_number,
-        type_of_item: newOrder.type_of_item,
-        customer_address: newOrder.customer.address,
-        customer_coords: newOrder.customer.coords,
-      });
-    }
-
-    res.status(201).json({ message: "Order submitted successfully", order: { order_number: newOrder.order_number } });
+    res.status(201).json({ 
+      message: "Order submitted successfully", 
+      order: { order_number: newOrder.order_number } 
+    });
 
   } catch (error) {
     console.error("❌ CRITICAL SUBMISSION ERROR:", error);
     res.status(500).json({ error: "Failed to submit order", details: error.message });
   }
 };
+
 
 
 
