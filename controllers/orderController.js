@@ -334,79 +334,103 @@ export const updateDriverLocation = async (req, res) => {
 
   
 // ============ calculateRouteInfo  ============
+// export const calculateRouteInfo = async (req, res) => {
+//     // 1. استلام الإحداثيات من الواجهة الأمامية
+//     const { origin, destination } = req.body; 
+
+//     console.log("Received coordinates:", origin, destination);
+
+
+//     if (!origin || !destination) {
+//         return res.status(400).json({ 
+//             success: false, 
+//             error: "Missing origin or destination coordinates." 
+//         });
+//     }
+
+//     // 2. التحقق من مفتاح API وتنسيق الإحداثيات
+//     if (!GOOGLE_API_KEY) {
+//         return res.status(500).json({ 
+//             success: false, 
+//             error: "Google Maps API key not configured on the server." 
+//         });
+//     }
+//     const originCoords = `${origin.lat},${origin.lng}`;
+//     const destinationCoords = `${destination.lat},${destination.lng}`;
+
+//     try {
+//         // 3. استدعاء Google Maps Directions API
+//         const googleUrl = `https://maps.googleapis.com/maps/api/directions/json`;
+
+//         console.log("API Key Length:", GOOGLE_API_KEY ? GOOGLE_API_KEY.length : "MISSING");    
+                  
+//         const response = await axios.get(googleUrl, {
+//             params: {
+//                 origin: originCoords,
+//                 destination: destinationCoords,
+//                 mode: 'driving', // حساب المسافة بناءً على القيادة
+//                 key: GOOGLE_API_KEY,
+//               }
+
+//         });
+
+//         const data = response.data;
+
+//         // 🚨 2. Logs بعد جلب الـ data
+//         console.log("Google API Response Status:", data.status); 
+//         console.log("Full Google Response (if failed):", data);
+
+//         // 4. تحليل الاستجابة
+//         if (data.status === 'OK' && data.routes && data.routes.length > 0) {
+//             const leg = data.routes[0].legs[0]; 
+            
+//             const distance = leg.distance.text; // مثال: "5.2 km"
+//             const duration = leg.duration.text; // مثال: "12 mins"
+            
+//             // 5. إرسال النتيجة
+//             return res.json({ 
+//                 success: true,
+//                 distance, 
+//                 duration 
+//             });
+
+//         } else {
+//             console.error("Google Maps API Error:", data.status, data.error_message);
+//             return res.status(500).json({ 
+//                 success: false,
+//                 error: "Could not calculate route. API status: " + data.status 
+//             });
+//         }
+
+//     } catch (error) {
+//         console.error("Route calculation exception:", error.message);
+//         return res.status(500).json({ 
+//             success: false,
+//             error: "Internal server error during route calculation." 
+//         });
+//     }
+// };
+
 export const calculateRouteInfo = async (req, res) => {
-    // 1. استلام الإحداثيات من الواجهة الأمامية
-    const { origin, destination } = req.body; 
-
-    console.log("Received coordinates:", origin, destination);
-
+    const { origin, destination } = req.body;
 
     if (!origin || !destination) {
-        return res.status(400).json({ 
-            success: false, 
-            error: "Missing origin or destination coordinates." 
-        });
+        return res.status(400).json({ success: false, error: "Missing coordinates" });
     }
-
-    // 2. التحقق من مفتاح API وتنسيق الإحداثيات
-    if (!GOOGLE_API_KEY) {
-        return res.status(500).json({ 
-            success: false, 
-            error: "Google Maps API key not configured on the server." 
-        });
-    }
-    const originCoords = `${origin.lat},${origin.lng}`;
-    const destinationCoords = `${destination.lat},${destination.lng}`;
 
     try {
-        // 3. استدعاء Google Maps Directions API
-        const googleUrl = `https://maps.googleapis.com/maps/api/directions/json`;
+        const url = `https://router.project-osrm.org/route/v1/driving/${origin.lng},${origin.lat};${destination.lng},${destination.lat}?overview=false`;
+        const response = await axios.get(url);
+        const route = response.data.routes[0].legs[0];
 
-        console.log("API Key Length:", GOOGLE_API_KEY ? GOOGLE_API_KEY.length : "MISSING");    
-                  
-        const response = await axios.get(googleUrl, {
-            params: {
-                origin: originCoords,
-                destination: destinationCoords,
-                mode: 'driving', // حساب المسافة بناءً على القيادة
-                key: GOOGLE_API_KEY,
-              }
-
+        return res.json({
+            success: true,
+            distance: route.distance + " m",
+            duration: route.duration + " sec"
         });
-
-        const data = response.data;
-
-        // 🚨 2. Logs بعد جلب الـ data
-        console.log("Google API Response Status:", data.status); 
-        console.log("Full Google Response (if failed):", data);
-
-        // 4. تحليل الاستجابة
-        if (data.status === 'OK' && data.routes && data.routes.length > 0) {
-            const leg = data.routes[0].legs[0]; 
-            
-            const distance = leg.distance.text; // مثال: "5.2 km"
-            const duration = leg.duration.text; // مثال: "12 mins"
-            
-            // 5. إرسال النتيجة
-            return res.json({ 
-                success: true,
-                distance, 
-                duration 
-            });
-
-        } else {
-            console.error("Google Maps API Error:", data.status, data.error_message);
-            return res.status(500).json({ 
-                success: false,
-                error: "Could not calculate route. API status: " + data.status 
-            });
-        }
 
     } catch (error) {
-        console.error("Route calculation exception:", error.message);
-        return res.status(500).json({ 
-            success: false,
-            error: "Internal server error during route calculation." 
-        });
+        console.error("OSRM Error:", error.message);
+        return res.status(500).json({ success: false, error: "Route calculation failed." });
     }
 };
