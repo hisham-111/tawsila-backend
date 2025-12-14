@@ -66,6 +66,7 @@ const io = new Server(httpServer, {
         methods: ["GET", "POST"],
         credentials: true,
     },
+        transports: ["websocket", "polling"], // 🔥 مهم للهاتف
 });
 
 // ⚡️ Expose io to controllers
@@ -85,7 +86,7 @@ const startServer = async () => {
 
         const PORT = process.env.PORT || 5000;
         httpServer.listen(PORT, () =>
-            console.log(`🚀 Server + Socket.IO running on port ${PORT}`)
+            console.log(` Server + Socket.IO running on port ${PORT}`)
         );
     } catch (error) {
         console.error("❌ MongoDB Error:", error.message);
