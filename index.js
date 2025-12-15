@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { initializeSocketListeners } from "./socket/socketHandler.js"; 
-
+import connectDB from "./config/db.js";
 import userRoutes from "./routes/userRoutes.js";
 import orderRoutes from "./routes/orderRoutes.js";
 import publicOrderRoutes from "./routes/publicOrderRoutes.js";
@@ -81,18 +81,40 @@ initializeSocketListeners(io);
 
 const startServer = async () => {
     try {
-        await mongoose.connect(process.env.MONGO_URI);
-        console.log("✅ MongoDB Connected Successfully");
+        // 🔥 1. Call your imported function to connect to the DB
+        await connectDB();
+        
+        // 🔥 2. Remove the old connection code: await mongoose.connect(process.env.MONGO_URI);
+        //    (The error handling for Mongo connection is now inside connectDB)
 
         const PORT = process.env.PORT || 5000;
         httpServer.listen(PORT, () =>
             console.log(` Server + Socket.IO running on port ${PORT}`)
         );
     } catch (error) {
-        console.error("❌ MongoDB Error:", error.message);
+        // This catch block will now mostly handle Express/Socket server startup errors, 
+        // as the MongoDB connection error handles its own exit.
+        console.error("❌ Server Startup Error:", error.message);
+       
         process.exit(1);
     }
 };
 
 startServer();
+// const startServer = async () => {
+//     try {
+//         await mongoose.connect(process.env.MONGO_URI);
+//         console.log("✅ MongoDB Connected Successfully");
+
+//         const PORT = process.env.PORT || 5000;
+//         httpServer.listen(PORT, () =>
+//             console.log(` Server + Socket.IO running on port ${PORT}`)
+//         );
+//     } catch (error) {
+//         console.error("❌ MongoDB Error:", error.message);
+//         process.exit(1);
+//     }
+// };
+
+// startServer();
 
