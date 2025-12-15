@@ -101,6 +101,7 @@ const startServer = async () => {
 };
 
 startServer();
+
 // const startServer = async () => {
 //     try {
 //         await mongoose.connect(process.env.MONGO_URI);
