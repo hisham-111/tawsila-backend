@@ -425,8 +425,8 @@ export const calculateRouteInfo = async (req, res) => {
 
         return res.json({
             success: true,
-            distance: route.distance + " m",
-            duration: route.duration + " sec"
+            distance: route.distance,
+            duration: route.duration
         });
 
     } catch (error) {
