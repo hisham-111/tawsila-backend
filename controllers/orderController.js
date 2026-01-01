@@ -367,7 +367,7 @@ export const cancelOrder = async (req, res) => {
         const { orderId } = req.params;
 
         // البحث عن الطلب والتحقق من أنه لم يتم إلغاؤه مسبقًا أو تسليمه
-        const order = await Order.findOne({ _id: orderId });
+        const order = await Order.findOne({ order_number: orderId});
 
         if (!order) {
             return res.status(404).json({ error: "Order not found" });
