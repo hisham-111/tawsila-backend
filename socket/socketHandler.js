@@ -121,6 +121,37 @@ export const initializeSocketListeners = (io) => {
                 console.log(`🚗❌ Driver offline: ${driverId}`);
             }
         });
+
+        // ============================
+        // 7. Cancel Order via Socket
+        socket.on("cancel-order", async ({ orderId, cancelledBy }) => {
+            try {
+                const order = await Order.findById(orderId);
+                if (!order || order.status === "delivered" || order.status === "cancelled") return;
+
+                order.status = "cancelled";
+                order.cancelledAt = new Date();
+                await order.save();
+
+                // إعادة توافر السائق إذا تم تعيينه
+                if (order.assigned_staff_id) {
+                    await User.findByIdAndUpdate(order.assigned_staff_id, { availability: true });
+                }
+
+                // إشعار الجميع في الغرفة
+                io.to(order.order_number).emit("order-cancelled", { orderId, cancelledAt: order.cancelledAt, cancelledBy });
+
+                // إشعار السائق منفردًا إذا كان موجودًا
+                if (order.assigned_staff_id) {
+                    const driverSocketId = activeDrivers.get(order.assigned_staff_id.toString());
+                    if (driverSocketId) {
+                        io.to(driverSocketId).emit("order-cancelled", { orderId, cancelledAt: order.cancelledAt, cancelledBy });
+                    }
+                }
+            } catch (err) {
+                console.error("❌ Socket cancel-order error:", err.message);
+            }
+        });
     });
 };
 
@@ -168,36 +199,7 @@ export const assignClosestDriver = async (orderCoords) => {
 };
 
 
-// ============================
-// 7. Cancel Order via Socket
-socket.on("cancel-order", async ({ orderId, cancelledBy }) => {
-    try {
-        const order = await Order.findById(orderId);
-        if (!order || order.status === "delivered" || order.status === "cancelled") return;
 
-        order.status = "cancelled";
-        order.cancelledAt = new Date();
-        await order.save();
-
-        // إعادة توافر السائق إذا تم تعيينه
-        if (order.assigned_staff_id) {
-            await User.findByIdAndUpdate(order.assigned_staff_id, { availability: true });
-        }
-
-        // إشعار الجميع في الغرفة
-        io.to(order.order_number).emit("order-cancelled", { orderId, cancelledAt: order.cancelledAt, cancelledBy });
-
-        // إشعار السائق منفردًا إذا كان موجودًا
-        if (order.assigned_staff_id) {
-            const driverSocketId = activeDrivers.get(order.assigned_staff_id.toString());
-            if (driverSocketId) {
-                io.to(driverSocketId).emit("order-cancelled", { orderId, cancelledAt: order.cancelledAt, cancelledBy });
-            }
-        }
-    } catch (err) {
-        console.error("❌ Socket cancel-order error:", err.message);
-    }
-});
 
 
 
