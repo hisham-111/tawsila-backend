@@ -12,7 +12,8 @@ import {
   acceptOrder,
   updateDriverLocation,
   calculateRouteInfo,
-  submitOrderRating
+  submitOrderRating,
+  cancelOrder
 } from "../controllers/orderController.js";
 import { authMiddleware } from "../middleware/auth.js";
 
@@ -26,7 +27,9 @@ router.get("/logs-status", authMiddleware(["admin"]), getOrdersByRange);
 
 router.get("/", getOrders); 
 router.post('/route-info', calculateRouteInfo);
-router.post("/accept", authMiddleware(["staff", "admin"]), acceptOrder);
+router.post("/accept", authMiddleware(["staff"]), acceptOrder);
+router.post("/cancel/:id", authMiddleware(["staff"]), cancelOrder);
+
 router.post('/location/update', updateDriverLocation);
 
 router.get("/:id", getOrder); 
