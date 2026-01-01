@@ -1,6 +1,4 @@
-// src/controllers/orderController.js
 import Order from "../models/Order.js";
-const GOOGLE_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 import axios from 'axios';
 
 
@@ -334,82 +332,7 @@ export const updateDriverLocation = async (req, res) => {
 
   
 // ============ calculateRouteInfo  ============
-// export const calculateRouteInfo = async (req, res) => {
-//     // 1. استلام الإحداثيات من الواجهة الأمامية
-//     const { origin, destination } = req.body; 
 
-//     console.log("Received coordinates:", origin, destination);
-
-
-//     if (!origin || !destination) {
-//         return res.status(400).json({ 
-//             success: false, 
-//             error: "Missing origin or destination coordinates." 
-//         });
-//     }
-
-//     // 2. التحقق من مفتاح API وتنسيق الإحداثيات
-//     if (!GOOGLE_API_KEY) {
-//         return res.status(500).json({ 
-//             success: false, 
-//             error: "Google Maps API key not configured on the server." 
-//         });
-//     }
-//     const originCoords = `${origin.lat},${origin.lng}`;
-//     const destinationCoords = `${destination.lat},${destination.lng}`;
-
-//     try {
-//         // 3. استدعاء Google Maps Directions API
-//         const googleUrl = `https://maps.googleapis.com/maps/api/directions/json`;
-
-//         console.log("API Key Length:", GOOGLE_API_KEY ? GOOGLE_API_KEY.length : "MISSING");    
-                  
-//         const response = await axios.get(googleUrl, {
-//             params: {
-//                 origin: originCoords,
-//                 destination: destinationCoords,
-//                 mode: 'driving', // حساب المسافة بناءً على القيادة
-//                 key: GOOGLE_API_KEY,
-//               }
-
-//         });
-
-//         const data = response.data;
-
-//         // 🚨 2. Logs بعد جلب الـ data
-//         console.log("Google API Response Status:", data.status); 
-//         console.log("Full Google Response (if failed):", data);
-
-//         // 4. تحليل الاستجابة
-//         if (data.status === 'OK' && data.routes && data.routes.length > 0) {
-//             const leg = data.routes[0].legs[0]; 
-            
-//             const distance = leg.distance.text; // مثال: "5.2 km"
-//             const duration = leg.duration.text; // مثال: "12 mins"
-            
-//             // 5. إرسال النتيجة
-//             return res.json({ 
-//                 success: true,
-//                 distance, 
-//                 duration 
-//             });
-
-//         } else {
-//             console.error("Google Maps API Error:", data.status, data.error_message);
-//             return res.status(500).json({ 
-//                 success: false,
-//                 error: "Could not calculate route. API status: " + data.status 
-//             });
-//         }
-
-//     } catch (error) {
-//         console.error("Route calculation exception:", error.message);
-//         return res.status(500).json({ 
-//             success: false,
-//             error: "Internal server error during route calculation." 
-//         });
-//     }
-// };
 
 export const calculateRouteInfo = async (req, res) => {
     const { origin, destination } = req.body;
@@ -432,5 +355,64 @@ export const calculateRouteInfo = async (req, res) => {
     } catch (error) {
         console.error("OSRM Error:", error.message);
         return res.status(500).json({ success: false, error: "Route calculation failed." });
+    }
+};
+
+
+// ===========================
+// CANCEL ORDER 🛑
+// ===========================
+export const cancelOrder = async (req, res) => {
+    try {
+        const { orderId } = req.params;
+
+        // البحث عن الطلب والتحقق من أنه لم يتم إلغاؤه مسبقًا أو تسليمه
+        const order = await Order.findOne({ _id: orderId });
+
+        if (!order) {
+            return res.status(404).json({ error: "Order not found" });
+        }
+
+        if (order.status === "delivered") {
+            return res.status(400).json({ error: "Cannot cancel a delivered order" });
+        }
+
+        if (order.status === "cancelled") {
+            return res.status(400).json({ error: "Order is already cancelled" });
+        }
+
+        // تحديث حالة الطلب إلى cancelled وتسجيل الوقت
+        order.status = "cancelled";
+        order.cancelledAt = new Date();
+        await order.save();
+
+        // إعادة توافر السائق إذا تم تعيينه
+        if (order.assigned_staff_id) {
+            await User.findByIdAndUpdate(order.assigned_staff_id, { availability: true });
+        }
+
+        // إشعار العميل والسائق عبر Socket.io
+        if (req.app.get("io")) {
+            const io = req.app.get("io");
+            io.to(order.order_number).emit("order-cancelled", {
+                orderId: order._id,
+                cancelledAt: order.cancelledAt,
+            });
+
+            if (order.assigned_staff_id) {
+                const driverSocketId = activeDrivers.get(order.assigned_staff_id.toString());
+                if (driverSocketId) {
+                    io.to(driverSocketId).emit("order-cancelled", {
+                        orderId: order._id,
+                        cancelledAt: order.cancelledAt,
+                    });
+                }
+            }
+        }
+
+        res.json({ message: "Order cancelled successfully", order });
+    } catch (error) {
+        console.error("❌ Error cancelling order:", error.message);
+        res.status(500).json({ error: "Failed to cancel order", details: error.message });
     }
 };

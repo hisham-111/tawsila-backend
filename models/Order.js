@@ -27,18 +27,16 @@ const orderSchema = new Schema({
     ref: "User",
   },
 
-  // status: {
-  // type: String,
-  //  enum: ["received", "in_transit", "delivered"],
-  //  default: "received",
-  // },
-
    status: {
         type: String,
-        enum: ["received", "in_transit", "delivered"],
+        enum: ["received", "in_transit", "delivered", "cancelled"],
         default: "received",
         // 💡 إضافة فهرس لتحسين أداء البحث عن الطلبات المتاحة
         index: true, 
+    },
+    cancelledAt: {
+      type: Date,
+      default: null,
     },
 
   type_of_item: { type: String },
