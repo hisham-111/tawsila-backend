@@ -28,7 +28,7 @@ router.get("/logs-status", authMiddleware(["admin"]), getOrdersByRange);
 router.get("/", getOrders); 
 router.post('/route-info', calculateRouteInfo);
 router.post("/accept", authMiddleware(["staff"]), acceptOrder);
-router.post("/cancel/:id", authMiddleware(["staff"]), cancelOrder);
+router.post("/cancel/:orderId", authMiddleware(["staff"]), cancelOrder);
 
 router.post('/location/update', updateDriverLocation);
 
