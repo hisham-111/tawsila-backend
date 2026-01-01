@@ -1,9 +1,11 @@
 import Order from "../models/Order.js";
-import User from "../models/User.js"; // لإحضار بيانات السائقين
+import User from "../models/User.js";
+import { activeDrivers } from './socketStore.js';
+
 import mongoose from "mongoose";
 
 // استخدام Map لتخزين السائقين النشطين (DriverId -> SocketId)
-const activeDrivers = new Map();
+// const activeDrivers = new Map();
 
 // الثابت الخاص بالغرفة يجب أن يكون متطابقًا مع orderController.js
 const DRIVERS_POOL_ROOM = "drivers-pool"; 
