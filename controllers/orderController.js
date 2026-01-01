@@ -366,25 +366,22 @@ export const cancelOrder = async (req, res) => {
     try {
         const { orderId } = req.params;
 
-        // البحث عن الطلب والتحقق من أنه لم يتم إلغاؤه مسبقًا أو تسليمه
-        const order = await Order.findOne({ order_number: orderId});
+        // البحث عن الطلب والتحقق أنه لم يتم إلغاؤه أو تسليمه
+        const order = await Order.findOneAndUpdate(
+            { 
+                order_number: orderId,
+                status: { $nin: ["delivered", "cancelled"] } 
+            },
+            {
+                status: "cancelled",
+                cancelledAt: new Date()
+            },
+            { new: true }
+        );
 
         if (!order) {
-            return res.status(404).json({ error: "Order not found" });
+            return res.status(404).json({ error: "Order not found or already delivered/cancelled" });
         }
-
-        if (order.status === "delivered") {
-            return res.status(400).json({ error: "Cannot cancel a delivered order" });
-        }
-
-        if (order.status === "cancelled") {
-            return res.status(400).json({ error: "Order is already cancelled" });
-        }
-
-        // تحديث حالة الطلب إلى cancelled وتسجيل الوقت
-        order.status = "cancelled";
-        order.cancelledAt = new Date();
-        await order.save();
 
         // إعادة توافر السائق إذا تم تعيينه
         if (order.assigned_staff_id) {
@@ -411,8 +408,10 @@ export const cancelOrder = async (req, res) => {
         }
 
         res.json({ message: "Order cancelled successfully", order });
+
     } catch (error) {
         console.error("❌ Error cancelling order:", error.message);
         res.status(500).json({ error: "Failed to cancel order", details: error.message });
     }
 };
+
