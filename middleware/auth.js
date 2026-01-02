@@ -1,10 +1,6 @@
-// src/middleware/authMiddleware.js
 import jwt from "jsonwebtoken";
 
-/**
- * Protect routes and optionally restrict by roles
- * @param {Array} roles - Optional array of allowed roles ['admin', 'staff', 'customer']
- */
+
 export const authMiddleware = (roles = []) => {
   return (req, res, next) => {
     const authHeader = req.headers.authorization;

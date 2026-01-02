@@ -1,36 +1,14 @@
 import Order from "../models/Order.js";
 import User from "../models/User.js";
 import { getActiveDriversMap } from "../socket/socketHandler.js";
-
-
-// 🚨 الحل: تعريف الثابت المفقود هنا ليصبح متاحًا داخل الدوال
+import { haversineDistance } from "../utils/geoUtils.js";
+import { generateOrderNumber } from "../utils/generateNumber.js";
 const DRIVERS_POOL_ROOM = "drivers-pool"; 
 
-const generateOrderNumber = () => {
-    // Generate a unique-ish string: Timestamp (last 10 digits) + a 4-digit random number
-    const timestampPart = Date.now().toString().slice(-10);
-    const randomPart = Math.floor(Math.random() * 9000) + 1000;
-    return `ORD-${timestampPart}-${randomPart}`;
-};
+
 // =======================================
 // SUBMIT ORDER
 // =======================================
-
-
-
-
-
-const haversineDistance = (coords1, coords2) => {
-  const toRad = deg => deg * Math.PI / 180;
-  const R = 6371; // km
-  const dLat = toRad(coords2.lat - coords1.lat);
-  const dLng = toRad(coords2.lng - coords1.lng);
-  const a = 
-    Math.sin(dLat/2) ** 2 +
-    Math.cos(toRad(coords1.lat)) * Math.cos(toRad(coords2.lat)) * Math.sin(dLng/2) ** 2;
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-  return R * c; // distance in km
-};
 
 export const submitOrder = async (req, res) => {
   try {

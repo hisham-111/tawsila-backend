@@ -20,7 +20,6 @@ dotenv.config();
 // 1. Define the list of allowed origins (frontend URLs)
 const allowedOrigins = [
     "http://localhost:5173" , "https://tawsiladelivery.netlify.app" // Development environment
-    // IMPORTANT: Add your deployed frontend URL here, e.g., "https://your-website.com"
 ];
 
 // 2. Conditionally add the CLIENT_URL from environment variables if it exists
@@ -101,21 +100,4 @@ const startServer = async () => {
 };
 
 startServer();
-
-// const startServer = async () => {
-//     try {
-//         await mongoose.connect(process.env.MONGO_URI);
-//         console.log("✅ MongoDB Connected Successfully");
-
-//         const PORT = process.env.PORT || 5000;
-//         httpServer.listen(PORT, () =>
-//             console.log(` Server + Socket.IO running on port ${PORT}`)
-//         );
-//     } catch (error) {
-//         console.error("❌ MongoDB Error:", error.message);
-//         process.exit(1);
-//     }
-// };
-
-// startServer();
 

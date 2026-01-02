@@ -1,4 +1,3 @@
-// src/routes/userRoutes.js
 import { Router } from "express";
 import {
   createUser,
