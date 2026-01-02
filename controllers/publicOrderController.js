@@ -34,7 +34,6 @@ const haversineDistance = (coords1, coords2) => {
 
 export const submitOrder = async (req, res) => {
   try {
-    
 
     const existingOrder = await Order.findOne({
       "customer.phone": req.body.customer.phone,
@@ -57,7 +56,6 @@ export const submitOrder = async (req, res) => {
     let closestDriver = null;
 
     if (driverIds.length > 0) {
-      // جلب السائقين المتاحين
       const drivers = await User.find({ 
         _id: { $in: driverIds },
         role: "staff",
@@ -76,12 +74,10 @@ export const submitOrder = async (req, res) => {
       });
 
       if (closestDriver) {
-        // تحديث الطلب بالسائق الأقرب
         newOrder.assigned_staff_id = closestDriver._id;
         newOrder.status = "in_transit";
         await newOrder.save();
 
-        // إخطار السائق الأقرب فقط
         const io = req.app.get("io");
         const driverSocketId = activeDriversMap.get(closestDriver._id.toString());
         if (io && driverSocketId) {
@@ -92,7 +88,6 @@ export const submitOrder = async (req, res) => {
           });
         }
 
-        // إخطار بقية السائقين مع استثناء السائق الأقرب
         driverIds.forEach(driverId => {
           if (driverId === closestDriver._id.toString()) return; // استثناء الأقرب
           const socketId = activeDriversMap.get(driverId);
