@@ -17,54 +17,7 @@ const generateOrderNumber = () => {
 // =======================================
 
 
-// export const submitOrder = async (req, res) => {
-//     try { 
-//         const orderData = {
-//             ...req.body,
-//             order_number: generateOrderNumber(), // استخدام الدالة المخصصة
-//         };
 
-//         const newOrder = await Order.create(orderData);
-
-//         // 2. Notify ALL active drivers via Socket.IO (Broadcast to the pool)
-//         const io = req.app.get("io");
-        
-//         if (io) {
-//             // الآن DRIVERS_POOL_ROOM مُعرّف ولن يسبب خطأ
-//             io.to(DRIVERS_POOL_ROOM).emit("new-order", {
-//                 order_number: newOrder.order_number,
-//                 type_of_item: newOrder.type_of_item,
-//                 customer_address: newOrder.customer.address,
-//                 customer_coords: newOrder.customer.coords,
-//             });
-
-//             console.log(`✅ Sent new order ${newOrder.order_number} to all active drivers in the pool.`);
-//         } else {
-//             console.log(`⚠️ Socket.IO not initialized. Order ${newOrder.order_number} submitted but not broadcasted.`);
-//         }
-
-//         // 3. Return success response
-//         res.status(201).json({
-//             message: "Order submitted successfully",
-//             order: { order_number: newOrder.order_number },
-//         });
-
-//     } catch (error) {
-//         console.error("❌ CRITICAL SUBMISSION ERROR:", error);
-
-//         // 💡 منطق محسّن للتعامل مع أخطاء التحقق من صحة البيانات
-//         if (error.name === "ValidationError") {
-//             // إرجاع 400 (Bad Request) لأخطاء البيانات المدخلة
-//             return res.status(400).json({ error: "Validation Failed", details: error.message });
-//         }
-        
-//         // إرجاع 500 لأخطاء الخادم الأخرى
-//         res.status(500).json({ error: "Failed to process order submission due to a server error.", details: error.message });
-//     }
-// };
-
-
-// دالة لحساب المسافة الجغرافية (خط مستقيم)
 
 
 const haversineDistance = (coords1, coords2) => {
@@ -81,6 +34,20 @@ const haversineDistance = (coords1, coords2) => {
 
 export const submitOrder = async (req, res) => {
   try {
+    
+
+    const existingOrder = await Order.findOne({
+      "customer.phone": req.body.customer.phone,
+      status: { $in: ["received", "in_transit"] }
+    });
+
+    if (existingOrder) {
+      return res.status(400).json({
+        error: "You already have an active order",
+        order_number: existingOrder.order_number
+      });
+    }
+
     const orderData = { ...req.body, order_number: generateOrderNumber() };
     const newOrder = await Order.create(orderData);
 
