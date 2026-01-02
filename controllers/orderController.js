@@ -144,12 +144,38 @@ export const getOrdersByRange = async (req, res) => {
 // ===========================
 // UPDATE ORDER
 // ===========================
+// export const updateOrder = async (req, res) => {
+//   try {
+//     const order = await Order.findByIdAndUpdate(
+//       req.params.id,
+//       req.body,
+//       { new: true } // return updated document
+//     ).populate("assigned_staff_id", "-password -token");
+
+//     if (!order) return res.status(404).json({ error: "Order not found" });
+
+//     res.status(200).json({ message: "Order updated successfully", order });
+//   } catch (err) {
+//     console.error("UPDATE ORDER ERROR:", err);
+//     res.status(500).json({ error: "Server error while updating order" });
+//   }
+// };
+
 export const updateOrder = async (req, res) => {
   try {
+    const { status } = req.body;
+
+    // إذا تم إرسال status
+    if (status === "cancelled") {
+      req.body.cancelledAt = new Date(); // ضع التاريخ الحالي
+    } else {
+      req.body.cancelledAt = null; // أي تغيير آخر يمسح التاريخ
+    }
+
     const order = await Order.findByIdAndUpdate(
       req.params.id,
       req.body,
-      { new: true } // return updated document
+      { new: true }
     ).populate("assigned_staff_id", "-password -token");
 
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -160,6 +186,7 @@ export const updateOrder = async (req, res) => {
     res.status(500).json({ error: "Server error while updating order" });
   }
 };
+
 
 
 // ===========================
