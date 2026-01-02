@@ -39,70 +39,79 @@ export const getOrder = async (req, res) => {
   }
 };
 
-
-
-// for data statistics
-
 const getStartDate = (range) => {
   const now = new Date();
-  let startDate;
+  let startDate = new Date(now); // نسخ التاريخ الحالي
 
-  switch(range) {
+  switch (range) {
     case "daily":
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      startDate.setHours(0,0,0,0);
       break;
     case "weekly":
-      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      startDate.setDate(startDate.getDate() - 6); // آخر 7 أيام
+      startDate.setHours(0,0,0,0);
       break;
     case "monthly":
-      startDate = new Date(now.getTime() - 30*24*60*60*1000);
+      startDate.setDate(1); // بداية الشهر الحالي
       startDate.setHours(0,0,0,0);
       break;
     default:
-      startDate = new Date(0);
+      startDate = new Date(0); // fallback
   }
-
   return startDate;
-}
+};
 
-export const getOrdersByRange = async (req,res) => {
+
+export const getOrdersByRange = async (req, res) => {
   try {
     const { range } = req.query;
     const startDate = getStartDate(range);
 
     const stats = await Order.aggregate([
       { $match: { createdAt: { $gte: startDate } } },
-      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, orders: { $sum: 1 } } },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+          orders: { $sum: 1 }
+        }
+      },
       { $sort: { _id: 1 } },
-      { $project: { date: "$_id", orders: 1, _id:0 } }
+      { $project: { date: "$_id", orders: 1, _id: 0 } }
     ]);
 
     res.json(stats);
-
-  } catch(err) {
-    console.error(err);
+  } catch (error) {
+    console.error("❌ Error loading range stats:", error);
     res.status(500).json({ error: "Failed to load statistics" });
   }
-}
+};
 
-export const getPlacesStats = async (req,res) => {
+
+export const getPlacesStats = async (req, res) => {
   try {
     const { range } = req.query;
     const startDate = getStartDate(range);
 
     const results = await Order.aggregate([
       { $match: { createdAt: { $gte: startDate } } },
-      { $group: { _id: "$customer.address", deliveries: { $sum: 1 } } },
-      { $project: { city: "$_id", deliveries: 1, _id:0 } }
+      {
+        $group: {
+          _id: "$customer.address",
+          deliveries: { $sum: 1 }
+        }
+      },
+      {
+        $project: { city: "$_id", deliveries: 1, _id: 0 }
+      }
     ]);
 
     res.json(results);
-
-  } catch(err) {
-    console.error(err);
+  } catch (error) {
+    console.error("❌ Stats error:", error);
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
-}
+};
+
 // ===========================
 // GET PLACES STATS
 // ===========================
