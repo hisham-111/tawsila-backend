@@ -1,6 +1,6 @@
 import { Router } from "express";
 import {
-  createUser,
+  // createUser,
   getUsers,
   getUser,
   updateUser,
@@ -19,8 +19,7 @@ router.post("/register", register);
 router.post("/login", login);
 
 // Protected (admin only)
-
-router.post("/", authMiddleware(["admin"]), createUser);
+// router.post("/", authMiddleware(["admin"]), createUser);
 router.get("/", getUsers);
 router.get("/:id", getUser);
 router.put("/:id", authMiddleware(["admin"]), updateUser);

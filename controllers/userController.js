@@ -6,36 +6,31 @@ import jwt from "jsonwebtoken";
 // ===========================
 // ADMIN / STAFF REGISTER
 // ===========================
+
 export const register = async (req, res) => {
   try {
     const { full_name, username, phone, address, password, role } = req.body;
 
-    // Validate fields
     if (!full_name || !username || !phone || !password || !role) {
       return res.status(400).json({ error: "All fields are required" });
     }
 
-    // Only allow admin or staff
     if (!["admin", "staff"].includes(role)) {
       return res.status(400).json({ error: "Invalid role" });
     }
 
-    // Prevent creating admin from frontend
+    // منع إنشاء admin من الواجهة
     if (role === "admin") {
-      return res.status(403).json({ error: "Admins can only be created manually or by another admin" });
+      return res.status(403).json({ error: "Admins can only be created by another admin" });
     }
 
-    // Check if username exists
     const existingUser = await User.findOne({ username });
     if (existingUser) {
-      return res.status(400).json({ error: "Username already exists" });
+      return res.status(409).json({ error: "Username already exists" });
     }
 
-    // Hash password
-    const salt = Number(process.env.SALT_ROUNDS) || 10;
-    const hashedPassword = await bcrypt.hash(password, salt);
+    const hashedPassword = await bcrypt.hash(password, 12);
 
-    // Create user
     const user = await User.create({
       full_name,
       username,
@@ -58,83 +53,91 @@ export const register = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: "Internal server error" });
   }
 };
+
 
 
 
 // ===========================
 // LOGIN
 // ===========================
+
+
 export const login = async (req, res) => {
- try {
+  try {
     const { username, password } = req.body;
 
-    const user = await User.findOne({ username });
-    if (!user) return res.status(400).json({ error: "Invalid username or password" });
+    const user = await User.findOne({ username }).select("+password");
+    if (!user) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
 
     const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(400).json({ error: "Invalid username or password" });
+    if (!isMatch) {
+      return res.status(401).json({ error: "Invalid username or password" });
+    }
 
     const token = jwt.sign(
       { id: user._id, role: user.role },
-        process.env.JWT_SECRET,
+      process.env.JWT_SECRET,
       { expiresIn: "1d" }
     );
-  res.json({
-    message: "Login successful",
-    token,
-    user: {
-    _id: user._id, // driverId
-    username: user.username,
-    full_name: user.full_name,
-    role: user.role,
-  }
- });
 
- } catch (err) {
- res.status(500).json({ error: err.message });
- }
+    res.json({
+      message: "Login successful",
+      token,
+      user: {
+        _id: user._id,
+        username: user.username,
+        full_name: user.full_name,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ error: "Internal server error" });
+  }
 };
+
 
 
 
 // ===========================
 // CRUD OPERATIONS
 // ===========================
-export const createUser = async (req, res) => {
-  try {
-    const { role, password, ...rest } = req.body;
+// export const createUser = async (req, res) => {
+//   try {
+//     const { role, password, ...rest } = req.body;
 
-    if (!["admin", "staff"].includes(role)) {
-      return res.status(400).json({ error: "Invalid role" });
-    }
+//     if (!["admin", "staff"].includes(role)) {
+//       return res.status(400).json({ error: "Invalid role" });
+//     }
 
-    // Only admin can create new users
-    if (req.user.role !== "admin") {
-      return res.status(403).json({ error: "Only admins can create users" });
-    }
+//     // Only admin can create new users
+//     if (req.user.role !== "admin") {
+//       return res.status(403).json({ error: "Only admins can create users" });
+//     }
 
-    const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
+//     const hashedPassword = password ? await bcrypt.hash(password, 10) : undefined;
 
-    const user = await User.create({
-      ...rest,
-      role,
-      password: hashedPassword
-    });
+//     const user = await User.create({
+//       ...rest,
+//       role,
+//       password: hashedPassword
+//     });
 
-    res.status(201).json({
-      _id: user._id,
-      full_name: user.full_name,
-      username: user.username,
-      role: user.role,
-    });
+//     res.status(201).json({
+//       _id: user._id,
+//       full_name: user.full_name,
+//       username: user.username,
+//       role: user.role,
+//     });
 
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-};
+//   } catch (err) {
+//     res.status(500).json({ error: err.message });
+//   }
+// };
 
 
 
