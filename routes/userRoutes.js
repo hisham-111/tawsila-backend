@@ -15,7 +15,7 @@ import { authMiddleware } from "../middleware/auth.js";
 const router = Router();
 
 // Public (for staff/admin login only)
-router.post("/register", register); 
+router.post("/register",authMiddleware(["admin"]), register); 
 router.post("/login", login);
 
 // Protected (admin only)
