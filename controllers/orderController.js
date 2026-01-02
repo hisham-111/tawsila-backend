@@ -39,105 +39,171 @@ export const getOrder = async (req, res) => {
   }
 };
 
-// ===========================
-// GET PLACES STATS
-// ===========================
-export const getPlacesStats = async (req, res) => {
+
+
+// for data statistics
+
+const getStartDate = (range) => {
+  const now = new Date();
+  let startDate;
+
+  switch(range) {
+    case "daily":
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      break;
+    case "weekly":
+      startDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+      break;
+    case "monthly":
+      startDate = new Date(now.getTime() - 30*24*60*60*1000);
+      startDate.setHours(0,0,0,0);
+      break;
+    default:
+      startDate = new Date(0);
+  }
+
+  return startDate;
+}
+
+export const getOrdersByRange = async (req,res) => {
   try {
     const { range } = req.query;
+    const startDate = getStartDate(range);
 
-    let startDate = new Date();
+    const stats = await Order.aggregate([
+      { $match: { createdAt: { $gte: startDate } } },
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }, orders: { $sum: 1 } } },
+      { $sort: { _id: 1 } },
+      { $project: { date: "$_id", orders: 1, _id:0 } }
+    ]);
 
-    if (range === "daily") {
-      startDate.setHours(0, 0, 0, 0);
-    } else if (range === "weekly") {
-      startDate.setDate(startDate.getDate() - 7);
-    } else if (range === "monthly") {
-      startDate.setMonth(startDate.getMonth() - 1);
-    }
+    res.json(stats);
+
+  } catch(err) {
+    console.error(err);
+    res.status(500).json({ error: "Failed to load statistics" });
+  }
+}
+
+export const getPlacesStats = async (req,res) => {
+  try {
+    const { range } = req.query;
+    const startDate = getStartDate(range);
 
     const results = await Order.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: "$customer.address",
-          deliveries: { $sum: 1 }
-        }
-      },
-      {
-        $project: {
-          city: "$_id",
-          deliveries: 1,
-          _id: 0
-        }
-      }
+      { $match: { createdAt: { $gte: startDate } } },
+      { $group: { _id: "$customer.address", deliveries: { $sum: 1 } } },
+      { $project: { city: "$_id", deliveries: 1, _id:0 } }
     ]);
 
     res.json(results);
 
-  } catch (error) {
-    console.log("❌ Stats error:", error);
+  } catch(err) {
+    console.error(err);
     res.status(500).json({ error: "Failed to fetch statistics" });
   }
-};
+}
+// ===========================
+// GET PLACES STATS
+// ===========================
+// export const getPlacesStats = async (req, res) => {
+//   try {
+//     const { range } = req.query;
+
+//     let startDate = new Date();
+
+//     if (range === "daily") {
+//       startDate.setHours(0, 0, 0, 0);
+//     } else if (range === "weekly") {
+//       startDate.setDate(startDate.getDate() - 7);
+//     } else if (range === "monthly") {
+//       startDate.setMonth(startDate.getMonth() - 1);
+//     }
+
+//     const results = await Order.aggregate([
+//       {
+//         $match: {
+//           createdAt: { $gte: startDate }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: "$customer.address",
+//           deliveries: { $sum: 1 }
+//         }
+//       },
+//       {
+//         $project: {
+//           city: "$_id",
+//           deliveries: 1,
+//           _id: 0
+//         }
+//       }
+//     ]);
+
+//     res.json(results);
+
+//   } catch (error) {
+//     console.log("❌ Stats error:", error);
+//     res.status(500).json({ error: "Failed to fetch statistics" });
+//   }
+// };
+
+
 
 
 // ===========================
 // GET Orders STATS
 // ===========================
-export const getOrdersByRange = async (req, res) => {
-  try {
-    const { range } = req.query;
+// export const getOrdersByRange = async (req, res) => {
+//   try {
+//     const { range } = req.query;
 
-    let startDate = new Date();
+//     let startDate = new Date();
 
-    if (range === "daily") {
-      startDate.setHours(0, 0, 0, 0);
-    } 
-    else if (range === "weekly") {
-      startDate.setDate(startDate.getDate() - 7);
-    } 
-    else if (range === "monthly") {
-      startDate.setMonth(startDate.getMonth() - 1);
-    }
+//     if (range === "daily") {
+//       startDate.setHours(0, 0, 0, 0);
+//     } 
+//     else if (range === "weekly") {
+//       startDate.setDate(startDate.getDate() - 7);
+//     } 
+//     else if (range === "monthly") {
+//       startDate.setMonth(startDate.getMonth() - 1);
+//     }
 
-    const stats = await Order.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate }
-        }
-      },
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
-          },
-          orders: { $sum: 1 }
-        }
-      },
-      {
-        $sort: { _id: 1 }
-      },
-      {
-        $project: {
-          date: "$_id",
-          orders: 1,
-          _id: 0
-        }
-      }
-    ]);
+//     const stats = await Order.aggregate([
+//       {
+//         $match: {
+//           createdAt: { $gte: startDate }
+//         }
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
+//           },
+//           orders: { $sum: 1 }
+//         }
+//       },
+//       {
+//         $sort: { _id: 1 }
+//       },
+//       {
+//         $project: {
+//           date: "$_id",
+//           orders: 1,
+//           _id: 0
+//         }
+//       }
+//     ]);
 
-    res.json(stats);
+//     res.json(stats);
 
-  } catch (error) {
-    console.error("❌ Error loading range stats:", error);
-    res.status(500).json({ error: "Failed to load statistics" });
-  }
-};
+//   } catch (error) {
+//     console.error("❌ Error loading range stats:", error);
+//     res.status(500).json({ error: "Failed to load statistics" });
+//   }
+// };
 
 
 
