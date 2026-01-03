@@ -13,7 +13,17 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 export const submitOrder = async (req, res) => {
   try {
 
-   
+    const existingOrder = await Order.findOne({
+      "customer.phone": req.body.customer.phone,
+      status: { $in: ["received", "in_transit"] }
+    });
+
+    if (existingOrder) {
+      return res.status(400).json({
+        error: "You already have an active order",
+        order_number: existingOrder.order_number
+      });
+    }
 
     const orderData = { ...req.body, order_number: generateOrderNumber() };
     const newOrder = await Order.create(orderData);
