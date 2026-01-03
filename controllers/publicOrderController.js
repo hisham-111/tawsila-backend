@@ -13,27 +13,10 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 export const submitOrder = async (req, res) => {
   try {
 
-        const { idempotencyKey } = req.body;
-
-    // ===================== 1️⃣ protect from double submit =====================
-    if (!idempotencyKey) {
-      return res.status(400).json({ error: "Missing idempotency key" });
-    }
-
-    const duplicateOrder = await Order.findOne({ idempotencyKey });
-    if (duplicateOrder) {
-      return res.status(409).json({
-        error: "Order already submitted",
-        order_number: duplicateOrder.order_number
-      });
-    }
-
    
 
-    const orderData = { ...req.body,idempotencyKey, order_number: generateOrderNumber(), status: "received"};
+    const orderData = { ...req.body, order_number: generateOrderNumber() };
     const newOrder = await Order.create(orderData);
-
-    // ===================== 3️⃣   search on close driver  =====================
 
     const activeDriversMap = getActiveDriversMap();
     const driverIds = Array.from(activeDriversMap.keys());
@@ -58,7 +41,6 @@ export const submitOrder = async (req, res) => {
         }
       });
 
-     // ===================== 4️⃣  send order to close driver =====================
       if (closestDriver) {
         newOrder.assigned_staff_id = closestDriver._id;
         newOrder.status = "in_transit";
@@ -73,9 +55,6 @@ export const submitOrder = async (req, res) => {
             type_of_item: newOrder.type_of_item
           });
         }
-
-         // ===================== 5️⃣  notifide others drivers  =====================
-
 
         driverIds.forEach(driverId => {
           if (driverId === closestDriver._id.toString()) return; // استثناء الأقرب
