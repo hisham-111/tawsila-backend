@@ -172,6 +172,10 @@ export const initializeSocketListeners = (io) => {
                 );
 
                 if (updatedOrder) {
+                    io.to(orderId).emit("delivery-complete", {
+                        orderId,
+                        status: updatedOrder.status
+                    });
                     console.log(`📦✅ Order ${orderId} delivered by Driver ${driverId}. Notifying customer room.`);
 
                     // تحديث availability للسائق بعد التسليم
