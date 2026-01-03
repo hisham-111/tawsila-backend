@@ -42,7 +42,7 @@ const orderSchema = new Schema({
     type: String,
     index: true,
     unique: true
-  }
+  },
 
 
   type_of_item: { type: String },
