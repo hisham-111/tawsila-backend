@@ -307,7 +307,8 @@ export const submitOrderRating = async (req, res) => {
             { 
                 order_number: orderId, 
                 // 🔑 FIX: Changed status to "Delivered" to match database casing.
-                status: "delivered", 
+                // status: "delivered", 
+                status: { $regex: /^delivered$/i },      
                 rating: { $exists: false } // Must NOT have a rating yet
             }, 
             { rating: numericRating },
