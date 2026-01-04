@@ -183,7 +183,7 @@ export const initializeSocketListeners = (io) => {
                         await User.findByIdAndUpdate(updatedOrder.assigned_staff_id, { availability: true });
                     }
 
-                    io.to(orderId).emit("delivery-complete"); 
+                    // io.to(orderId).emit("delivery-complete"); 
                 } else {
                     console.warn(`Order ${orderId} not found for delivery status update.`);
                 }
