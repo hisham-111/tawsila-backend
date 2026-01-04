@@ -3,6 +3,8 @@ import User from "../models/User.js";
 import { getActiveDriversMap } from "../socket/socketHandler.js";
 import { haversineDistance } from "../utils/geoUtils.js";
 import { generateOrderNumber } from "../utils/generateNumber.js";
+import crypto from "crypto";
+
 const DRIVERS_POOL_ROOM = "drivers-pool"; 
 
 
@@ -97,11 +99,11 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 
 export const submitOrder = async (req, res) => {
   try {
-    
+
     const { customer, type_of_item, requestId } = req.body;
 
     // --- 1. Prevent double submission using requestId ---
-    // let finalRequestId = requestId || crypto.randomUUID();
+     let finalRequestId = requestId || crypto.randomUUID();
 
      if (requestId) {
       const existingRequest = await Order.findOne({ requestId });
@@ -119,7 +121,7 @@ export const submitOrder = async (req, res) => {
       customer,
       type_of_item,
       order_number: generateOrderNumber(),
-      requestId: requestId || generateOrderNumber(),
+      requestId: finalRequestId,
       status: "received",
     };
 
