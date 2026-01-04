@@ -97,11 +97,13 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 
 export const submitOrder = async (req, res) => {
   try {
+    
     const { customer, type_of_item, requestId } = req.body;
 
     // --- 1. Prevent double submission using requestId ---
     // let finalRequestId = requestId || crypto.randomUUID();
-    if (requestId) {
+
+     if (requestId) {
       const existingRequest = await Order.findOne({ requestId });
       if (existingRequest) {
         return res.status(200).json({
@@ -116,12 +118,13 @@ export const submitOrder = async (req, res) => {
     const newOrderData = {
       customer,
       type_of_item,
-      order_number: generateOrderNumber(), // always unique
-      requestId: generateOrderNumber(),
+      order_number: generateOrderNumber(),
+      requestId: requestId || generateOrderNumber(),
       status: "received",
     };
 
     const newOrder = await Order.create(newOrderData);
+
 
     // --- 3. Assign closest available driver ---
     const activeDriversMap = getActiveDriversMap();
