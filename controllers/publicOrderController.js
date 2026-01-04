@@ -13,6 +13,18 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 export const submitOrder = async (req, res) => {
   try {
 
+    // --- Prevent double submission with requestId ---
+    if (req.body.requestId) {
+      const duplicateRequest = await Order.findOne({ requestId: req.body.requestId });
+      if (duplicateRequest) {
+        return res.status(409).json({
+          error: "Duplicate submission detected",
+          order_number: duplicateRequest.order_number
+        });
+      }
+    }
+
+     // --- Prevent overlapping active orders ---
     const existingOrder = await Order.findOne({
       "customer.phone": req.body.customer.phone,
       status: { $in: ["received", "in_transit"] }
@@ -25,7 +37,7 @@ export const submitOrder = async (req, res) => {
       });
     }
 
-    const orderData = { ...req.body, order_number: generateOrderNumber() };
+    const orderData = { ...req.body, order_number: generateOrderNumber(), requestId: req.body.requestId || null};
     const newOrder = await Order.create(orderData);
 
     const activeDriversMap = getActiveDriversMap();
