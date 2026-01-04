@@ -92,17 +92,15 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 //   }
 // };
 
-import crypto from "crypto";
-import Order from "../models/Order";
-import User from "../models/User";
-import { generateOrderNumber, haversineDistance, getActiveDriversMap } from "../utils";
+
+
 
 export const submitOrder = async (req, res) => {
   try {
     const { customer, type_of_item, requestId } = req.body;
 
     // --- 1. Prevent double submission using requestId ---
-    let finalRequestId = requestId || crypto.randomUUID();
+    // let finalRequestId = requestId || crypto.randomUUID();
     if (requestId) {
       const existingRequest = await Order.findOne({ requestId });
       if (existingRequest) {
@@ -119,7 +117,7 @@ export const submitOrder = async (req, res) => {
       customer,
       type_of_item,
       order_number: generateOrderNumber(), // always unique
-      requestId: finalRequestId,
+      requestId: generateOrderNumber(),
       status: "received",
     };
 
