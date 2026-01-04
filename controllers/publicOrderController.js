@@ -99,13 +99,10 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 
 export const submitOrder = async (req, res) => {
   try {
-
     const { customer, type_of_item, requestId } = req.body;
 
-    // --- 1. Prevent double submission using requestId ---
-     let finalRequestId = requestId || crypto.randomUUID();
-
-     if (requestId) {
+    // --- Prevent double submission using requestId ---
+    if (requestId) {
       const existingRequest = await Order.findOne({ requestId });
       if (existingRequest) {
         return res.status(200).json({
@@ -116,19 +113,19 @@ export const submitOrder = async (req, res) => {
       }
     }
 
-    // --- 2. Create a new order regardless of previous orders ---
+    // --- Create a new order ---
     const newOrderData = {
       customer,
       type_of_item,
       order_number: generateOrderNumber(),
-      requestId: finalRequestId,
+      requestId: requestId || crypto.randomUUID(),
       status: "received",
+      tracked_location: null, // مهم جداً
     };
 
     const newOrder = await Order.create(newOrderData);
 
-
-    // --- 3. Assign closest available driver ---
+    // --- Assign closest driver ---
     const activeDriversMap = getActiveDriversMap();
     const driverIds = Array.from(activeDriversMap.keys());
 
@@ -159,7 +156,6 @@ export const submitOrder = async (req, res) => {
         const io = req.app.get("io");
         const closestDriverSocket = activeDriversMap.get(closestDriver._id.toString());
 
-        // Notify closest driver
         if (io && closestDriverSocket) {
           io.to(closestDriverSocket).emit("new-order-assigned", {
             order_number: newOrder.order_number,
@@ -168,7 +164,6 @@ export const submitOrder = async (req, res) => {
           });
         }
 
-        // Notify all other active drivers
         driverIds.forEach(driverId => {
           if (driverId === closestDriver._id.toString()) return;
           const socketId = activeDriversMap.get(driverId);
@@ -184,7 +179,6 @@ export const submitOrder = async (req, res) => {
       }
     }
 
-    // --- 4. Return new order info ---
     res.status(201).json({
       message: "Order submitted successfully",
       order: { order_number: newOrder.order_number },
