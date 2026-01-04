@@ -10,48 +10,139 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 // SUBMIT ORDER
 // =======================================
 
+// export const submitOrder = async (req, res) => {
+//   try {
+
+//     const existingOrder = await Order.findOne({
+//       "customer.phone": req.body.customer.phone,
+//       status: { $in: ["received", "in_transit"] }
+//     });
+
+//     if (existingOrder) {
+//       return res.status(400).json({
+//         error: "You already have an active order",
+//         order_number: existingOrder.order_number
+//       });
+//     }
+
+//     const orderData = { ...req.body, order_number: generateOrderNumber() };
+//     const newOrder = await Order.create(orderData);
+
+//     const activeDriversMap = getActiveDriversMap();
+//     const driverIds = Array.from(activeDriversMap.keys());
+
+//     let closestDriver = null;
+
+//     if (driverIds.length > 0) {
+//       const drivers = await User.find({ 
+//         _id: { $in: driverIds },
+//         role: "staff",
+//         availability: true
+//       }).select("coords");
+
+//       let minDistance = Infinity;
+
+//       drivers.forEach(driver => {
+//         if (!driver.coords) return;
+//         const distance = haversineDistance(newOrder.customer.coords, driver.coords);
+//         if (distance < minDistance) {
+//           minDistance = distance;
+//           closestDriver = driver;
+//         }
+//       });
+
+//       if (closestDriver) {
+//         newOrder.assigned_staff_id = closestDriver._id;
+//         newOrder.status = "in_transit";
+//         await newOrder.save();
+
+//         const io = req.app.get("io");
+//         const driverSocketId = activeDriversMap.get(closestDriver._id.toString());
+//         if (io && driverSocketId) {
+//           io.to(driverSocketId).emit("new-order-assigned", {
+//             order_number: newOrder.order_number,
+//             customer: newOrder.customer,
+//             type_of_item: newOrder.type_of_item
+//           });
+//         }
+
+//         driverIds.forEach(driverId => {
+//           if (driverId === closestDriver._id.toString()) return; // استثناء الأقرب
+//           const socketId = activeDriversMap.get(driverId);
+//           if (io && socketId) {
+//             io.to(socketId).emit("new-order", {
+//               order_number: newOrder.order_number,
+//               type_of_item: newOrder.type_of_item,
+//               customer_address: newOrder.customer.address,
+//               customer_coords: newOrder.customer.coords,
+//             });
+//           }
+//         });
+//       }
+//     }
+
+//     res.status(201).json({ 
+//       message: "Order submitted successfully", 
+//       order: { order_number: newOrder.order_number } 
+//     });
+
+//   } catch (error) {
+//     console.error("❌ CRITICAL SUBMISSION ERROR:", error);
+//     res.status(500).json({ error: "Failed to submit order", details: error.message });
+//   }
+// };
+
 export const submitOrder = async (req, res) => {
   try {
+    const { customer, type_of_item, requestId } = req.body;
 
-    // --- Prevent double submission with requestId ---
-    if (req.body.requestId) {
-      const duplicateRequest = await Order.findOne({ requestId: req.body.requestId });
-      if (duplicateRequest) {
-        return res.status(409).json({
-          error: "Duplicate submission detected",
-          order_number: duplicateRequest.order_number
+    // --- 1. Prevent double submission using requestId (idempotent) ---
+    if (requestId) {
+      const existingRequest = await Order.findOne({ requestId });
+      if (existingRequest) {
+        return res.status(200).json({
+          message: "Duplicate submission detected",
+          order: { order_number: existingRequest.order_number },
+          alreadyExists: true,
         });
       }
     }
 
-     // --- Prevent overlapping active orders ---
-    const existingOrder = await Order.findOne({
-      "customer.phone": req.body.customer.phone,
-      status: { $in: ["received", "in_transit"] }
+    // --- 2. Prevent overlapping active orders ---
+    const activeOrder = await Order.findOne({
+      "customer.phone": customer.phone,
+      status: { $in: ["received", "in_transit"] },
     });
 
-    if (existingOrder) {
+    if (activeOrder) {
       return res.status(400).json({
         error: "You already have an active order",
-        order_number: existingOrder.order_number
+        order_number: activeOrder.order_number,
       });
     }
 
-    const orderData = { ...req.body, order_number: generateOrderNumber(), requestId: req.body.requestId || null};
+    // --- 3. Create new order ---
+    const orderData = {
+      ...req.body,
+      order_number: generateOrderNumber(),
+      requestId: requestId || null,
+      status: "received",
+    };
+
     const newOrder = await Order.create(orderData);
 
+    // --- 4. Assign closest available driver ---
     const activeDriversMap = getActiveDriversMap();
     const driverIds = Array.from(activeDriversMap.keys());
 
-    let closestDriver = null;
-
     if (driverIds.length > 0) {
-      const drivers = await User.find({ 
+      const drivers = await User.find({
         _id: { $in: driverIds },
         role: "staff",
-        availability: true
+        availability: true,
       }).select("coords");
 
+      let closestDriver = null;
       let minDistance = Infinity;
 
       drivers.forEach(driver => {
@@ -69,17 +160,20 @@ export const submitOrder = async (req, res) => {
         await newOrder.save();
 
         const io = req.app.get("io");
-        const driverSocketId = activeDriversMap.get(closestDriver._id.toString());
-        if (io && driverSocketId) {
-          io.to(driverSocketId).emit("new-order-assigned", {
+        const closestDriverSocket = activeDriversMap.get(closestDriver._id.toString());
+
+        // Notify the closest driver
+        if (io && closestDriverSocket) {
+          io.to(closestDriverSocket).emit("new-order-assigned", {
             order_number: newOrder.order_number,
             customer: newOrder.customer,
-            type_of_item: newOrder.type_of_item
+            type_of_item: newOrder.type_of_item,
           });
         }
 
+        // Notify all other active drivers
         driverIds.forEach(driverId => {
-          if (driverId === closestDriver._id.toString()) return; // استثناء الأقرب
+          if (driverId === closestDriver._id.toString()) return;
           const socketId = activeDriversMap.get(driverId);
           if (io && socketId) {
             io.to(socketId).emit("new-order", {
@@ -93,9 +187,10 @@ export const submitOrder = async (req, res) => {
       }
     }
 
-    res.status(201).json({ 
-      message: "Order submitted successfully", 
-      order: { order_number: newOrder.order_number } 
+    // --- 5. Return response ---
+    res.status(201).json({
+      message: "Order submitted successfully",
+      order: { order_number: newOrder.order_number },
     });
 
   } catch (error) {
@@ -103,6 +198,7 @@ export const submitOrder = async (req, res) => {
     res.status(500).json({ error: "Failed to submit order", details: error.message });
   }
 };
+
 
 
 
