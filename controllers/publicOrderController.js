@@ -105,17 +105,20 @@ export const submitOrder = async (req, res) => {
       return res.status(400).json({ error: "requestId is required to prevent duplicates" });
     }
 
-    // --- Prevent duplicate submission ---
+    // --- منع تقديم الطلب المكرر مع إرجاع الحالة الحالية ---
     const existingRequest = await Order.findOne({ requestId });
     if (existingRequest) {
       return res.status(200).json({
         message: "Duplicate submission detected",
-        order: { order_number: existingRequest.order_number },
+        order: { 
+          order_number: existingRequest.order_number,
+          status: existingRequest.status // أضفنا الحالة هنا
+        },
         alreadyExists: true,
       });
     }
 
-    // --- Create new order ---
+    // --- إنشاء طلب جديد ---
     const newOrderData = {
       customer,
       type_of_item,
@@ -127,7 +130,7 @@ export const submitOrder = async (req, res) => {
 
     const newOrder = await Order.create(newOrderData);
 
-    // --- Assign closest driver ---
+    // --- تعيين أقرب سائق ---
     const activeDriversMap = getActiveDriversMap();
     const driverIds = Array.from(activeDriversMap.keys());
 
@@ -158,7 +161,7 @@ export const submitOrder = async (req, res) => {
         const io = req.app.get("io");
         const closestDriverSocketId = activeDriversMap.get(closestDriver._id.toString());
 
-        // --- Emit to closest driver only ---
+        // --- إرسال الإشعار للسائق المخصص فقط ---
         if (io && closestDriverSocketId) {
           io.to(closestDriverSocketId).emit("new-order-assigned", {
             order_number: newOrder.order_number,
@@ -166,20 +169,6 @@ export const submitOrder = async (req, res) => {
             type_of_item: newOrder.type_of_item,
           });
         }
-
-        // --- Notify other drivers about new order (optional) ---
-        driverIds.forEach(driverId => {
-          if (driverId === closestDriver._id.toString()) return;
-          const socketId = activeDriversMap.get(driverId);
-          if (io && socketId) {
-            io.to(socketId).emit("new-order", {
-              order_number: newOrder.order_number,
-              type_of_item: newOrder.type_of_item,
-              customer_address: newOrder.customer.address,
-              customer_coords: newOrder.customer.coords,
-            });
-          }
-        });
       }
     }
 
@@ -193,7 +182,6 @@ export const submitOrder = async (req, res) => {
     res.status(500).json({ error: "Failed to submit order", details: error.message });
   }
 };
-
 
 
 
