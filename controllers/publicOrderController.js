@@ -91,11 +91,18 @@ const DRIVERS_POOL_ROOM = "drivers-pool";
 //     res.status(500).json({ error: "Failed to submit order", details: error.message });
 //   }
 // };
+
+import crypto from "crypto";
+import Order from "../models/Order";
+import User from "../models/User";
+import { generateOrderNumber, haversineDistance, getActiveDriversMap } from "../utils";
+
 export const submitOrder = async (req, res) => {
   try {
     const { customer, type_of_item, requestId } = req.body;
 
-    // --- Prevent double submission with requestId ---
+    // --- 1. Prevent double submission using requestId ---
+    let finalRequestId = requestId || crypto.randomUUID();
     if (requestId) {
       const existingRequest = await Order.findOne({ requestId });
       if (existingRequest) {
@@ -107,33 +114,21 @@ export const submitOrder = async (req, res) => {
       }
     }
 
-    // --- Prevent overlapping active orders (only active ones) ---
-    const activeOrder = await Order.findOne({
-      "customer.phone": customer.phone,
-      status: { $in: ["received", "in_transit"] },
-    });
-
-    if (activeOrder) {
-      return res.status(400).json({
-        error: "You already have an active order",
-        order_number: activeOrder.order_number,
-      });
-    }
-
-    // --- Create new order ---
+    // --- 2. Create a new order regardless of previous orders ---
     const newOrderData = {
       customer,
       type_of_item,
-      order_number: generateOrderNumber(), // always new
-      requestId: requestId || crypto.randomUUID(), // always new id
+      order_number: generateOrderNumber(), // always unique
+      requestId: finalRequestId,
       status: "received",
     };
 
     const newOrder = await Order.create(newOrderData);
 
-    // --- Assign closest driver (same as your logic) ---
+    // --- 3. Assign closest available driver ---
     const activeDriversMap = getActiveDriversMap();
     const driverIds = Array.from(activeDriversMap.keys());
+
     if (driverIds.length > 0) {
       const drivers = await User.find({
         _id: { $in: driverIds },
@@ -143,6 +138,7 @@ export const submitOrder = async (req, res) => {
 
       let closestDriver = null;
       let minDistance = Infinity;
+
       drivers.forEach(driver => {
         if (!driver.coords) return;
         const distance = haversineDistance(newOrder.customer.coords, driver.coords);
@@ -160,6 +156,7 @@ export const submitOrder = async (req, res) => {
         const io = req.app.get("io");
         const closestDriverSocket = activeDriversMap.get(closestDriver._id.toString());
 
+        // Notify closest driver
         if (io && closestDriverSocket) {
           io.to(closestDriverSocket).emit("new-order-assigned", {
             order_number: newOrder.order_number,
@@ -168,6 +165,7 @@ export const submitOrder = async (req, res) => {
           });
         }
 
+        // Notify all other active drivers
         driverIds.forEach(driverId => {
           if (driverId === closestDriver._id.toString()) return;
           const socketId = activeDriversMap.get(driverId);
@@ -183,6 +181,7 @@ export const submitOrder = async (req, res) => {
       }
     }
 
+    // --- 4. Return new order info ---
     res.status(201).json({
       message: "Order submitted successfully",
       order: { order_number: newOrder.order_number },
@@ -193,6 +192,7 @@ export const submitOrder = async (req, res) => {
     res.status(500).json({ error: "Failed to submit order", details: error.message });
   }
 };
+
 
 
 
