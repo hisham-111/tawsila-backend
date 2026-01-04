@@ -101,26 +101,28 @@ export const submitOrder = async (req, res) => {
   try {
     const { customer, type_of_item, requestId } = req.body;
 
-    // --- Prevent double submission using requestId ---
-    if (requestId) {
-      const existingRequest = await Order.findOne({ requestId });
-      if (existingRequest) {
-        return res.status(200).json({
-          message: "Duplicate submission detected",
-          order: { order_number: existingRequest.order_number },
-          alreadyExists: true,
-        });
-      }
+    if (!requestId) {
+      return res.status(400).json({ error: "requestId is required to prevent duplicates" });
     }
 
-    // --- Create a new order ---
+    // --- Prevent duplicate submission ---
+    const existingRequest = await Order.findOne({ requestId });
+    if (existingRequest) {
+      return res.status(200).json({
+        message: "Duplicate submission detected",
+        order: { order_number: existingRequest.order_number },
+        alreadyExists: true,
+      });
+    }
+
+    // --- Create new order ---
     const newOrderData = {
       customer,
       type_of_item,
       order_number: generateOrderNumber(),
-      requestId: requestId || crypto.randomUUID(),
+      requestId,
       status: "received",
-      tracked_location: null, // مهم جداً
+      tracked_location: null,
     };
 
     const newOrder = await Order.create(newOrderData);
@@ -154,16 +156,18 @@ export const submitOrder = async (req, res) => {
         await newOrder.save();
 
         const io = req.app.get("io");
-        const closestDriverSocket = activeDriversMap.get(closestDriver._id.toString());
+        const closestDriverSocketId = activeDriversMap.get(closestDriver._id.toString());
 
-        if (io && closestDriverSocket) {
-          io.to(closestDriverSocket).emit("new-order-assigned", {
+        // --- Emit to closest driver only ---
+        if (io && closestDriverSocketId) {
+          io.to(closestDriverSocketId).emit("new-order-assigned", {
             order_number: newOrder.order_number,
             customer: newOrder.customer,
             type_of_item: newOrder.type_of_item,
           });
         }
 
+        // --- Notify other drivers about new order (optional) ---
         driverIds.forEach(driverId => {
           if (driverId === closestDriver._id.toString()) return;
           const socketId = activeDriversMap.get(driverId);
