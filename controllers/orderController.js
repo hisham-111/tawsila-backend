@@ -284,6 +284,7 @@ export const getRatingsStats = async (req, res) => {
                 startDate = new Date(now.setDate(now.getDate() - 1));
                 break;
             case "week":
+              case "weekly":
                 startDate = new Date(now.setDate(now.getDate() - 7));
                 break;
             case "month":
