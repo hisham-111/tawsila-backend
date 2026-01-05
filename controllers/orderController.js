@@ -2,6 +2,8 @@ import Order from "../models/Order.js";
 import User from "../models/User.js"; 
 import { activeDrivers } from '../socket/socketStore.js';
 import axios from 'axios';
+const cache = new Map();
+const CACHE_DURATION = 30000; 
 
 
 
@@ -271,10 +273,95 @@ export const submitOrderRating = async (req, res) => {
 // GET RATINGS ( That Saved in DB) ⭐️
 // =============================================
 
+// export const getRatingsStats = async (req, res) => {
+//   console.log("🔥 RATINGS STATS HIT");
+//     try {
+//         const { range = "month" } = req.query;
+
+//         const now = new Date();
+//         let startDate;
+
+//         switch (range) {
+//             case "day":
+//                 startDate = new Date(now.setDate(now.getDate() - 1));
+//                 break;
+//             case "week":
+//               case "weekly":
+//                 startDate = new Date(now.setDate(now.getDate() - 7));
+//                 break;
+//             case "month":
+//                 startDate = new Date(now.setMonth(now.getMonth() - 1));
+//                 break;
+//             case "year":
+//                 startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+//                 break;
+//             default:
+//                 return res.status(400).json({ error: "Invalid range" });
+//         }
+
+//         const aggregation = await Order.aggregate([
+//             {
+//                 $match: {
+//                     rating: { $exists: true },
+//                     createdAt: { $gte: startDate }
+//                 }
+//             },
+//             {
+//                 $group: {
+//                     _id: "$rating",
+//                     count: { $sum: 1 },
+//                     avgRating: { $avg: "$rating" }
+//                 }
+//             }
+//         ]);
+
+//         let total = 0;
+//         let sum = 0;
+
+//         // Default distribution (1 → 5)
+//         const distribution = [1, 2, 3, 4, 5].map(star => ({
+//             star,
+//             count: 0
+//         }));
+
+//         aggregation.forEach(item => {
+//             total += item.count;
+//             sum += item._id * item.count;
+
+//             const index = distribution.findIndex(d => d.star === item._id);
+//             if (index !== -1) {
+//                 distribution[index].count = item.count;
+//             }
+//         });
+
+//         const average = total > 0 ? Number((sum / total).toFixed(2)) : 0;
+
+//         // Sort 5 → 1 (UI friendly)
+//         distribution.sort((a, b) => b.star - a.star);
+
+//         res.status(200).json({
+//             average,
+//             total,
+//             distribution
+//         });
+
+//     } catch (err) {
+//         console.error("RATING ANALYTICS ERROR:", err);
+//         res.status(500).json({
+//             error: "Failed to load ratings analytics"
+//         });
+//     }
+// };
 export const getRatingsStats = async (req, res) => {
-  console.log("🔥 RATINGS STATS HIT");
     try {
         const { range = "month" } = req.query;
+        const cacheKey = `ratings_${range}`;
+        
+        // 1. Check Cache first
+        const cachedData = cache.get(cacheKey);
+        if (cachedData && (Date.now() - cachedData.timestamp < CACHE_DURATION)) {
+            return res.status(200).json(cachedData.data);
+        }
 
         const now = new Date();
         let startDate;
@@ -284,7 +371,7 @@ export const getRatingsStats = async (req, res) => {
                 startDate = new Date(now.setDate(now.getDate() - 1));
                 break;
             case "week":
-              case "weekly":
+            case "weekly":
                 startDate = new Date(now.setDate(now.getDate() - 7));
                 break;
             case "month":
@@ -297,18 +384,19 @@ export const getRatingsStats = async (req, res) => {
                 return res.status(400).json({ error: "Invalid range" });
         }
 
+        // 2. Perform Aggregation
+        // Added index-friendly matching and specific project steps
         const aggregation = await Order.aggregate([
             {
                 $match: {
-                    rating: { $exists: true },
-                    createdAt: { $gte: startDate }
+                    createdAt: { $gte: startDate },
+                    rating: { $exists: true, $ne: null, $gt: 0 }
                 }
             },
             {
                 $group: {
                     _id: "$rating",
-                    count: { $sum: 1 },
-                    avgRating: { $avg: "$rating" }
+                    count: { $sum: 1 }
                 }
             }
         ]);
@@ -316,32 +404,40 @@ export const getRatingsStats = async (req, res) => {
         let total = 0;
         let sum = 0;
 
-        // Default distribution (1 → 5)
-        const distribution = [1, 2, 3, 4, 5].map(star => ({
-            star,
-            count: 0
-        }));
+        // Default distribution (5 down to 1 for UI friendliness)
+        const distributionMap = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
 
         aggregation.forEach(item => {
-            total += item.count;
-            sum += item._id * item.count;
-
-            const index = distribution.findIndex(d => d.star === item._id);
-            if (index !== -1) {
-                distribution[index].count = item.count;
+            const ratingValue = Math.round(item._id); // Ensure integer
+            if (distributionMap.hasOwnProperty(ratingValue)) {
+                distributionMap[ratingValue] = item.count;
+                total += item.count;
+                sum += ratingValue * item.count;
             }
         });
 
         const average = total > 0 ? Number((sum / total).toFixed(2)) : 0;
 
-        // Sort 5 → 1 (UI friendly)
-        distribution.sort((a, b) => b.star - a.star);
+        // Format for UI
+        const distribution = [5, 4, 3, 2, 1].map(star => ({
+            star,
+            count: distributionMap[star]
+        }));
 
-        res.status(200).json({
+        const responseData = {
             average,
             total,
-            distribution
+            distribution,
+            lastUpdated: new Date()
+        };
+
+        // 3. Save to Cache
+        cache.set(cacheKey, {
+            data: responseData,
+            timestamp: Date.now()
         });
+
+        res.status(200).json(responseData);
 
     } catch (err) {
         console.error("RATING ANALYTICS ERROR:", err);
@@ -350,7 +446,6 @@ export const getRatingsStats = async (req, res) => {
         });
     }
 };
-
 
 
 // ===========================
