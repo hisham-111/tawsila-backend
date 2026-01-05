@@ -31,6 +31,7 @@ const orderSchema = new Schema({
         type: String,
         enum: ["received", "in_transit", "delivered", "cancelled"],
         default: "received",
+        // 💡 إضافة فهرس لتحسين أداء البحث عن الطلبات المتاحة
         index: true, 
     },
     cancelledAt: {

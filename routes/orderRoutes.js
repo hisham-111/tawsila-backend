@@ -4,6 +4,7 @@ import {
   getOrder,
   getPlacesStats,
   getOrdersByRange,
+  getOrderRating,
   updateOrder,
   deleteOrder,
   getAvailableOrders,
@@ -18,6 +19,7 @@ import { authMiddleware } from "../middleware/auth.js";
 const router = Router();
 
 router.patch("/:orderId/rate", submitOrderRating); 
+router.get("/:orderId/rating", getOrderRating);
 router.get('/orders/available', getAvailableOrders);
 router.get("/places", authMiddleware(["admin"]), getPlacesStats);
 router.get("/logs-status", authMiddleware(["admin"]), getOrdersByRange);

@@ -21,7 +21,6 @@ export const getOrders = async (req, res) => {
   }
 };
 
-
 // ===========================
 // GET SINGLE ORDER
 // ===========================
@@ -39,20 +38,24 @@ export const getOrder = async (req, res) => {
   }
 };
 
+// ===========================
+// average date calculation helper
+// ===========================
+
 const getStartDate = (range) => {
   const now = new Date();
-  let startDate = new Date(now); // نسخ التاريخ الحالي
+  let startDate = new Date(now); 
 
   switch (range) {
     case "daily":
-      startDate.setHours(0,0,0,0);
+      startDate.setHours(0,0,0,0); // today from midnight
       break;
     case "weekly":
-      startDate.setDate(startDate.getDate() - 6); // آخر 7 أيام
+      startDate.setDate(startDate.getDate() - 6); //last 7 days
       startDate.setHours(0,0,0,0);
       break;
     case "monthly":
-      startDate.setDate(1); // بداية الشهر الحالي
+      startDate.setDate(1); // first day of month
       startDate.setHours(0,0,0,0);
       break;
     default:
@@ -61,7 +64,9 @@ const getStartDate = (range) => {
   return startDate;
 };
 
-
+// ===========================
+// GET Orders STATS
+// ===========================
 export const getOrdersByRange = async (req, res) => {
   try {
     const { range } = req.query;
@@ -86,7 +91,9 @@ export const getOrdersByRange = async (req, res) => {
   }
 };
 
-
+// ===========================
+// GET PLACES STATS
+// ===========================
 export const getPlacesStats = async (req, res) => {
   try {
     const { range } = req.query;
@@ -112,131 +119,10 @@ export const getPlacesStats = async (req, res) => {
   }
 };
 
-// ===========================
-// GET PLACES STATS
-// ===========================
-// export const getPlacesStats = async (req, res) => {
-//   try {
-//     const { range } = req.query;
-
-//     let startDate = new Date();
-
-//     if (range === "daily") {
-//       startDate.setHours(0, 0, 0, 0);
-//     } else if (range === "weekly") {
-//       startDate.setDate(startDate.getDate() - 7);
-//     } else if (range === "monthly") {
-//       startDate.setMonth(startDate.getMonth() - 1);
-//     }
-
-//     const results = await Order.aggregate([
-//       {
-//         $match: {
-//           createdAt: { $gte: startDate }
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: "$customer.address",
-//           deliveries: { $sum: 1 }
-//         }
-//       },
-//       {
-//         $project: {
-//           city: "$_id",
-//           deliveries: 1,
-//           _id: 0
-//         }
-//       }
-//     ]);
-
-//     res.json(results);
-
-//   } catch (error) {
-//     console.log("❌ Stats error:", error);
-//     res.status(500).json({ error: "Failed to fetch statistics" });
-//   }
-// };
-
-
-
-
-// ===========================
-// GET Orders STATS
-// ===========================
-// export const getOrdersByRange = async (req, res) => {
-//   try {
-//     const { range } = req.query;
-
-//     let startDate = new Date();
-
-//     if (range === "daily") {
-//       startDate.setHours(0, 0, 0, 0);
-//     } 
-//     else if (range === "weekly") {
-//       startDate.setDate(startDate.getDate() - 7);
-//     } 
-//     else if (range === "monthly") {
-//       startDate.setMonth(startDate.getMonth() - 1);
-//     }
-
-//     const stats = await Order.aggregate([
-//       {
-//         $match: {
-//           createdAt: { $gte: startDate }
-//         }
-//       },
-//       {
-//         $group: {
-//           _id: {
-//             $dateToString: { format: "%Y-%m-%d", date: "$createdAt" }
-//           },
-//           orders: { $sum: 1 }
-//         }
-//       },
-//       {
-//         $sort: { _id: 1 }
-//       },
-//       {
-//         $project: {
-//           date: "$_id",
-//           orders: 1,
-//           _id: 0
-//         }
-//       }
-//     ]);
-
-//     res.json(stats);
-
-//   } catch (error) {
-//     console.error("❌ Error loading range stats:", error);
-//     res.status(500).json({ error: "Failed to load statistics" });
-//   }
-// };
-
-
 
 // ===========================
 // UPDATE ORDER
 // ===========================
-
-// export const updateOrder = async (req, res) => {
-//   try {
-//     const order = await Order.findByIdAndUpdate(
-//       req.params.id,
-//       req.body,
-//       { new: true } // return updated document
-//     ).populate("assigned_staff_id", "-password -token");
-
-//     if (!order) return res.status(404).json({ error: "Order not found" });
-
-//     res.status(200).json({ message: "Order updated successfully", order });
-//   } catch (err) {
-//     console.error("UPDATE ORDER ERROR:", err);
-//     res.status(500).json({ error: "Server error while updating order" });
-//   }
-// };
-
 export const updateOrder = async (req, res) => {
   try {
     const { status } = req.body;
@@ -338,7 +224,48 @@ export const submitOrderRating = async (req, res) => {
 };
 
 
+// ===========================
+// GET RATING ( That Saved in DB) ⭐️
+// ===========================
 
+export const getOrderRating = async (req, res) => {
+  try{
+    const { orderId } = req.params;
+
+    const order = await Order.findOne(
+      { order_number: orderId},
+      "order_number rating status customer. name assigned_staff_id"
+    );
+
+    if ( !order ){
+      return res.status(404).json({
+
+         error: "Order not found"
+
+      });
+    }
+    if (order.rating === undefined || order.rating === null){
+      return res.status(200).json({
+        order_number: order.order_number,
+        rating: null,
+        message: "Order has not been rated yet"
+      });
+
+    }
+
+    res.status(200).json({
+      order_number: order.order_number,
+      rating: order.rating
+    });
+
+  } catch (err) {
+    console.error("Get Rating Error:", err);
+    res.status(500).json({
+       error: "Server error while fetching order rating"
+    });
+  }
+};
+      
 
 
 // ===========================
