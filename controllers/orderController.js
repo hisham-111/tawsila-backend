@@ -272,6 +272,7 @@ export const submitOrderRating = async (req, res) => {
 // =============================================
 
 export const getRatingsStats = async (req, res) => {
+  console.log("🔥 RATINGS STATS HIT");
     try {
         const { range = "month" } = req.query;
 
