@@ -224,48 +224,131 @@ export const submitOrderRating = async (req, res) => {
 };
 
 
-// ===========================
-// GET RATING ( That Saved in DB) ⭐️
-// ===========================
+// =============================================
+// GET RATING by an order ( That Saved in DB) ⭐️
+// =============================================
 
-export const getOrderRating = async (req, res) => {
-  try{
-    const { orderId } = req.params;
+// export const getOrderRating = async (req, res) => {
+//   try{
+//     const { orderId } = req.params;
 
-    const order = await Order.findOne(
-      { order_number: orderId},
-      "order_number rating status customer. name assigned_staff_id"
-    );
+//     const order = await Order.findOne(
+//       { order_number: orderId},
+//       "order_number rating status customer. name assigned_staff_id"
+//     );
 
-    if ( !order ){
-      return res.status(404).json({
+//     if ( !order ){
+//       return res.status(404).json({
 
-         error: "Order not found"
+//          error: "Order not found"
 
-      });
+//       });
+//     }
+//     if (order.rating === undefined || order.rating === null){
+//       return res.status(200).json({
+//         order_number: order.order_number,
+//         rating: null,
+//         message: "Order has not been rated yet"
+//       });
+
+//     }
+
+//     res.status(200).json({
+//       order_number: order.order_number,
+//       rating: order.rating
+//     });
+
+//   } catch (err) {
+//     console.error("Get Rating Error:", err);
+//     res.status(500).json({
+//        error: "Server error while fetching order rating"
+//     });
+//   }
+// };
+    
+
+// =============================================
+// GET RATINGS ( That Saved in DB) ⭐️
+// =============================================
+
+export const getRatingsStats = async (req, res) => {
+    try {
+        const { range = "month" } = req.query;
+
+        const now = new Date();
+        let startDate;
+
+        switch (range) {
+            case "day":
+                startDate = new Date(now.setDate(now.getDate() - 1));
+                break;
+            case "week":
+                startDate = new Date(now.setDate(now.getDate() - 7));
+                break;
+            case "month":
+                startDate = new Date(now.setMonth(now.getMonth() - 1));
+                break;
+            case "year":
+                startDate = new Date(now.setFullYear(now.getFullYear() - 1));
+                break;
+            default:
+                return res.status(400).json({ error: "Invalid range" });
+        }
+
+        const aggregation = await Order.aggregate([
+            {
+                $match: {
+                    rating: { $exists: true },
+                    createdAt: { $gte: startDate }
+                }
+            },
+            {
+                $group: {
+                    _id: "$rating",
+                    count: { $sum: 1 },
+                    avgRating: { $avg: "$rating" }
+                }
+            }
+        ]);
+
+        let total = 0;
+        let sum = 0;
+
+        // Default distribution (1 → 5)
+        const distribution = [1, 2, 3, 4, 5].map(star => ({
+            star,
+            count: 0
+        }));
+
+        aggregation.forEach(item => {
+            total += item.count;
+            sum += item._id * item.count;
+
+            const index = distribution.findIndex(d => d.star === item._id);
+            if (index !== -1) {
+                distribution[index].count = item.count;
+            }
+        });
+
+        const average = total > 0 ? Number((sum / total).toFixed(2)) : 0;
+
+        // Sort 5 → 1 (UI friendly)
+        distribution.sort((a, b) => b.star - a.star);
+
+        res.status(200).json({
+            average,
+            total,
+            distribution
+        });
+
+    } catch (err) {
+        console.error("RATING ANALYTICS ERROR:", err);
+        res.status(500).json({
+            error: "Failed to load ratings analytics"
+        });
     }
-    if (order.rating === undefined || order.rating === null){
-      return res.status(200).json({
-        order_number: order.order_number,
-        rating: null,
-        message: "Order has not been rated yet"
-      });
-
-    }
-
-    res.status(200).json({
-      order_number: order.order_number,
-      rating: order.rating
-    });
-
-  } catch (err) {
-    console.error("Get Rating Error:", err);
-    res.status(500).json({
-       error: "Server error while fetching order rating"
-    });
-  }
 };
-      
+
 
 
 // ===========================
