@@ -67,7 +67,7 @@ export const submitOrder = async (req, res) => {
         }
 
         driverIds.forEach(driverId => {
-          if (driverId === closestDriver._id.toString()) return; // استثناء الأقرب
+          if (driverId === closestDriver._id.toString()) return;
           const socketId = activeDriversMap.get(driverId);
           if (io && socketId) {
             io.to(socketId).emit("new-order", {
